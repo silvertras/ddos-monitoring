@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Serangan DDoS</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Monitor Serangan DDoS</h1>
+        <p>Total Serangan: <strong id="totalAttacks">0</strong></p>
+
+        <h2>Grafik Serangan</h2>
+        <canvas id="attackChart"></canvas>
+
+        <h2>Log Serangan per IP</h2>
+        <ul id="ipLogs"></ul>
+    </div>
+
+    <script>
+        async function fetchData() {
+            const response = await fetch('/api/data.js');
+            const result = await response.json();
+
+            document.getElementById("totalAttacks").innerText = result.totalAttacks;
+
+            // Update Log Serangan per IP
+            const ipLogsList = document.getElementById("ipLogs");
+            ipLogsList.innerHTML = "";
+            Object.keys(result.data).forEach((minute, index) => {
+                const li = document.createElement("li");
+                li.innerText = `${minute}: ${result.data[index]} serangan`;
+                ipLogsList.appendChild(li);
+            });
+
+            return result;
+        }
+
+        async function updateChart() {
+            const data = await fetchData();
+
+            const ctx = document.getElementById('attackChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Jumlah Serangan per Menit',
+                        data: data.data,
+                        borderColor: 'red',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        updateChart();
+        setInterval(updateChart, 10000); // Perbarui setiap 10 detik
+    </script>
+</body>
+</html>
