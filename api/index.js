@@ -1,41 +1,43 @@
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
 
+dotenv.config();  // Mengimpor variabel dari .env
 const app = express();
 const router = express.Router();
 
-// Middleware untuk menampilkan file statis
-app.use(express.static("public"));
-app.set("view engine", "ejs");
+// Koneksi ke MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log("MongoDB Connected"))
+  .catch(err => console.error("MongoDB Error:", err));
 
-// Load & Simpan Data Log
-const logFile = path.join(__dirname, "../logs.json");
-const loadLogs = () => JSON.parse(fs.readFileSync(logFile));
-const saveLogs = (data) => fs.writeFileSync(logFile, JSON.stringify(data, null, 2));
+// Schema untuk menyimpan IP & Timestamp
+const logSchema = new mongoose.Schema({
+    ip: String,
+    timestamp: { type: Date, default: Date.now }
+});
+const Log = mongoose.model("Log", logSchema);
 
-// Middleware untuk mencatat request & deteksi DDoS
-router.use((req, res, next) => {
-    const logs = loadLogs();
+// Middleware untuk mencatat request
+router.use(async (req, res, next) => {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    const now = Date.now();
+    await Log.create({ ip });
 
-    if (!logs.ip_logs[ip]) {
-        logs.ip_logs[ip] = [];
-    }
-
-    logs.ip_logs[ip] = logs.ip_logs[ip].filter(timestamp => now - timestamp < 60000);
-    logs.ip_logs[ip].push(now);
-    logs.total_attacks++;
-
-    saveLogs(logs);
     next();
 });
 
-// Halaman utama
-router.get("/", (req, res) => {
-    const logs = loadLogs();
-    res.render(path.join(__dirname, "../views/index.ejs"), { totalAttacks: logs.total_attacks, ipLogs: logs.ip_logs });
+// API untuk melihat total serangan & IP unik
+router.get("/", async (req, res) => {
+    const totalAttacks = await Log.countDocuments();
+    const uniqueIps = await Log.distinct("ip");
+
+    res.json({
+        totalAttacks,
+        uniqueIps: uniqueIps.length,
+        ips: uniqueIps
+    });
 });
 
 module.exports = app.use("/", router);
